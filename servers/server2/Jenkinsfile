@@ -1,140 +1,108 @@
-pipeline {
-
-    agent any
-
-    properties([
-        parameters([
-            [$class: 'ChoiceParameter',
-             choiceType: 'PT_SINGLE_SELECT',
-             description: 'Select the target server',
-             filterLength: 1,
-             filterable: false,
-             name: 'SERVER',
-             script: [
-                 $class: 'GroovyScript',
-                 script: [
-                     classpath: [],
-                     sandbox: true,
-                     script: '''
-                         return [
-                             'server1',
-                             'server2'
-                         ]
-                     '''
-                 ]
-             ]],
-
-            [$class: 'ChoiceParameter',
-             choiceType: 'PT_SINGLE_SELECT',
-             description: 'Select the target environment',
-             filterLength: 1,
-             filterable: false,
-             name: 'ENVIRONMENT',
-             script: [
-                 $class: 'GroovyScript',
-                 script: [
-                     classpath: [],
-                     sandbox: true,
-                     script: '''
-                         return [
-                             'dev',
-                             'qa'
-                         ]
-                     '''
-                 ]
-             ]],
-
-            [$class: 'ChoiceParameter',
-             choiceType: 'PT_SINGLE_SELECT',
-             description: 'Select the target service',
-             filterLength: 1,
-             filterable: false,
-             name: 'SERVICE',
-             script: [
-                 $class: 'GroovyScript',
-                 script: [
-                     classpath: [],
-                     sandbox: true,
-                     script: '''
-                         return [
-                             'service1',
-                             'service2'
-                         ]
-                     '''
-                 ]
-             ]]
-        ])
-    ])
-
-    parameters {
-
-        booleanParam(
+properties([
+    parameters([
+        [
+            $class: 'ChoiceParameter',
+            choiceType: 'PT_SINGLE_SELECT',
+            description: 'Select the target server',
+            filterLength: 1,
+            filterable: false,
+            name: 'SERVER',
+            script: [
+                $class: 'GroovyScript',
+                script: [
+                    classpath: [],
+                    sandbox: true,
+                    script: '''
+                        return [
+                            'server1',
+                            'server2'
+                        ]
+                    '''
+                ]
+            ]
+        ],
+        [
+            $class: 'ChoiceParameter',
+            choiceType: 'PT_SINGLE_SELECT',
+            description: 'Select the target environment',
+            filterLength: 1,
+            filterable: false,
+            name: 'ENVIRONMENT',
+            script: [
+                $class: 'GroovyScript',
+                script: [
+                    classpath: [],
+                    sandbox: true,
+                    script: '''
+                        return [
+                            'dev',
+                            'qa'
+                        ]
+                    '''
+                ]
+            ]
+        ],
+        [
+            $class: 'ChoiceParameter',
+            choiceType: 'PT_SINGLE_SELECT',
+            description: 'Select the target service',
+            filterLength: 1,
+            filterable: false,
+            name: 'SERVICE',
+            script: [
+                $class: 'GroovyScript',
+                script: [
+                    classpath: [],
+                    sandbox: true,
+                    script: '''
+                        return [
+                            'service1',
+                            'service2'
+                        ]
+                    '''
+                ]
+            ]
+        ],
+        [
+            $class: 'BooleanParameterDefinition',
             name: 'DRY_RUN',
             defaultValue: false,
             description: 'Refresh configuration cache only'
-        )
+        ]
+    ])
+])
 
-    }
+def configDir = '/opt/jenkins/config-cache'
+def configRepo = 'https://github.com/jainambarbhaya1509/jenkins.git'
 
-    environment {
-        CONFIG_DIR = "/opt/jenkins/config-cache"
-        CONFIG_REPO = "https://github.com/jainambarbhaya1509/jenkins.git"
-    }
+node {
 
-    stages {
+    stage('Clone Config Repo') {
 
-        stage('Clone Config Repo') {
+        if (params.DRY_RUN) {
 
-            when {
-                expression {
-                    params.DRY_RUN
+            if (!fileExists("${configDir}/.git")) {
+                echo 'Cloning config repo...'
+                sh "git clone '${configRepo}' '${configDir}'"
+            } else {
+                echo 'Updating config repo...'
+                dir(configDir) {
+                    sh '''
+                        git fetch origin
+                        git reset --hard origin/main
+                    '''
                 }
-            }
-
-            steps {
-
-                sh '''
-
-                if [ ! -d "$CONFIG_DIR/.git" ]
-                then
-                    echo "Cloning config repo..."
-
-                    git clone "$CONFIG_REPO" "$CONFIG_DIR"
-
-                else
-
-                    echo "Updating config repo..."
-
-                    cd "$CONFIG_DIR"
-
-                    git fetch origin
-
-                    git reset --hard origin/main
-
-                fi
-
-                '''
-
             }
 
         }
 
-        stage("Exit") {
+    }
 
-            when {
-                expression {
-                    params.DRY_RUN
-                }
-            }
+    stage('Exit') {
 
-            steps {
-
-                echo "Configuration cache refreshed."
-
-                echo "Open Build With Parameters again."
-
-            }
-
+        if (params.DRY_RUN) {
+            echo 'Configuration cache refreshed.'
+            echo 'Open Build With Parameters again.'
         }
 
     }
