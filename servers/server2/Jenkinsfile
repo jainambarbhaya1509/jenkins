@@ -24,7 +24,7 @@ properties([
                     script: '''
                         def serverName = "server2" // must match SERVER_NAME above
 
-                        def root = new File("/opt/jenkins/config-cache/servers/${serverName}")
+                        def root = new File("/var/jenkins_home/config-cache/servers/${serverName}")
 
                         if (!root.exists()) {
                             return ["Run Config Sync Job"]
@@ -61,7 +61,7 @@ properties([
                             return []
                         }
 
-                        def serviceDir = new File("/opt/jenkins/config-cache/servers/${serverName}/${SERVICE}")
+                        def serviceDir = new File("/var/jenkins_home/config-cache/servers/${serverName}/${SERVICE}")
 
                         if (!serviceDir.exists()) {
                             return ["No Environment Found"]
@@ -136,7 +136,7 @@ pipeline {
             steps {
                 script {
 
-                    def configFile = "/opt/jenkins/config-cache/servers/${SERVER_NAME}/${params.SERVICE}/${params.ENVIRONMENT}.yaml"
+                    def configFile = "/var/jenkins_home/config-cache/servers/${SERVER_NAME}/${params.SERVICE}/${params.ENVIRONMENT}.yaml"
 
                     if (!fileExists(configFile)) {
                         error("Config file not found: ${configFile}")
