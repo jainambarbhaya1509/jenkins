@@ -55,7 +55,7 @@ properties([
                 script: [
                     sandbox: false,
                     script: '''
-                        def serverName = "server1" // must match SERVER_NAME above
+                        def serverName = "server2" // must match SERVER_NAME above
 
                         if (!SERVICE) {
                             return []
@@ -109,17 +109,16 @@ pipeline {
         stage('Validate') {
             steps {
                 script {
-                    if (params.SERVICE in ["No Services Found"] ||
-                        params.ENVIRONMENT in ["No Environment Found"] ||
-                        params.SERVER in ["Run Config Sync Job", "No Servers Found"]) {
-                        error("Invalid selection. SERVER=${params.SERVER}, SERVICE=${params.SERVICE}, ENVIRONMENT=${params.ENVIRONMENT}")
+                    if (params.SERVICE in ["Run Config Sync Job", "No Services Found"] ||
+                        params.ENVIRONMENT in ["No Environment Found"]) {
+                        error("Invalid selection. SERVER=${SERVER_NAME}, SERVICE=${params.SERVICE}, ENVIRONMENT=${params.ENVIRONMENT}")
                     }
 
                     echo """
                     ============================
                     Deployment Configuration
                     ============================
-                    Server      : ${params.SERVER}
+                    Server      : ${SERVER_NAME}
                     Service     : ${params.SERVICE}
                     Environment : ${params.ENVIRONMENT}
                     Dry Run     : ${params.DRY_RUN}
@@ -137,7 +136,7 @@ pipeline {
             steps {
                 script {
 
-                    def configFile = "/opt/jenkins/config-cache/servers/${params.SERVER}/${params.SERVICE}/${params.ENVIRONMENT}.yaml"
+                    def configFile = "/opt/jenkins/config-cache/servers/${SERVER_NAME}/${params.SERVICE}/${params.ENVIRONMENT}.yaml"
 
                     if (!fileExists(configFile)) {
                         error("Config file not found: ${configFile}")
