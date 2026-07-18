@@ -1,12 +1,17 @@
 // ============================================================
-// This Jenkinsfile is scoped to a single server. Change this
-// value if you copy this file for another server, or better,
-// template it out per-server via your job-DSL / seed job.
+// This Jenkinsfile is scoped to a single server. Change
+// SERVER_NAME below if you copy this for another server.
 // It must match the literal string inside the Groovy scripts
-// below too, since Active Choice scripts run standalone and
-// can't read Jenkinsfile-level variables.
+// too, since Active Choice scripts run standalone and can't
+// read Jenkinsfile-level variables.
+//
+// This version reads directly from GitHub via the REST API
+// instead of any local filesystem path or cache. No sync job,
+// no volume mount, no workspace dependency required.
 // ============================================================
-def SERVER_NAME = "server2"
+def SERVER_NAME  = "server2"
+def GITHUB_REPO  = "jainambarbhaya1509/jenkins"
+def GITHUB_BRANCH = "main"
 
 properties([
     parameters([
@@ -20,25 +25,31 @@ properties([
             script: [
                 $class: 'GroovyScript',
                 script: [
-                    sandbox: false,
-                    script: '''
+                    sandbox: true,
+                    script: '''import groovy.json.JsonSlurper
+
                         def serverName = "server2" // must match SERVER_NAME above
+                        def repo = "jainambarbhaya1509/jenkins"
+                        def branch = "main"
 
-                        def root = new File("/var/jenkins_home/config-cache/servers/${serverName}")
+                        try {
+                            def url = "https://api.github.com/repos/${repo}/contents/servers/${serverName}?ref=${branch}"
+                            def response = url.toURL().text
+                            def items = new JsonSlurper().parseText(response)
 
-                        if (!root.exists()) {
-                            return ["Run Config Sync Job"]
+                            def services = items.findAll { it.type == "dir" }
+                                                 .collect { it.name }
+                                                 .sort()
+
+                            return services.isEmpty() ? ["No Services Found"] : services
+                        } catch (e) {
+                            return [e.toString()]
                         }
-
-                        def dirs = root.listFiles()
-                        if (dirs == null) {
-                            return ["No Services Found"]
-                        }
-
-                        return dirs.findAll { it.isDirectory() }
-                                   .collect { it.name }
-                                   .sort()
-                    '''
+                    ''',
+                ],
+                fallbackScript: [
+                    sandbox: true,
+                    script: 'return ["No Services Found"]'
                 ]
             ]
         ],
@@ -53,39 +64,37 @@ properties([
             script: [
                 $class: 'GroovyScript',
                 script: [
-                    sandbox: false,
-                    script: '''
+                    sandbox: true,
+                    script: '''import groovy.json.JsonSlurper
+
                         def serverName = "server2" // must match SERVER_NAME above
+                        def repo = "jainambarbhaya1509/jenkins"
+                        def branch = "main"
 
                         if (!SERVICE) {
                             return []
                         }
 
-                        def serviceDir = new File("/var/jenkins_home/config-cache/servers/${serverName}/${SERVICE}")
+                        try {
+                            def url = "https://api.github.com/repos/${repo}/contents/servers/${serverName}/${SERVICE}?ref=${branch}"
+                            def response = url.toURL().text
+                            def items = new JsonSlurper().parseText(response)
 
-                        if (!serviceDir.exists()) {
-                            return ["No Environment Found"]
+                            def envs = items.findAll {
+                                                 it.type == "file" &&
+                                                 (it.name.endsWith(".yaml") || it.name.endsWith(".yml"))
+                                             }
+                                             .collect { it.name.replaceAll(/\\.ya?ml$/, "") }
+                                             .sort()
+
+                            return envs.isEmpty() ? ["No Environment Found"] : envs
+                        } catch (e) {
+                            return [e.toString()]
                         }
-
-                        def files = serviceDir.listFiles()
-                        if (files == null) {
-                            return ["No Environment Found"]
-                        }
-
-                        def envs = files.findAll {
-                                            it.isFile() &&
-                                            (it.name.endsWith(".yaml") || it.name.endsWith(".yml"))
-                                        }
-                                        .collect {
-                                            it.name.replaceAll(/\\.ya?ml$/, "")
-                                        }
-                                        .sort()
-
-                        return envs.isEmpty() ? ["No Environment Found"] : envs
                     ''',
                 ],
                 fallbackScript: [
-                    sandbox: false,
+                    sandbox: true,
                     script: 'return ["No Environment Found"]'
                 ]
             ]
@@ -109,7 +118,7 @@ pipeline {
         stage('Validate') {
             steps {
                 script {
-                    if (params.SERVICE in ["Run Config Sync Job", "No Services Found"] ||
+                    if (params.SERVICE in ["No Services Found"] ||
                         params.ENVIRONMENT in ["No Environment Found"]) {
                         error("Invalid selection. SERVER=${SERVER_NAME}, SERVICE=${params.SERVICE}, ENVIRONMENT=${params.ENVIRONMENT}")
                     }
@@ -135,21 +144,22 @@ pipeline {
 
             steps {
                 script {
+                    def rawUrl = "https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/servers/${SERVER_NAME}/${params.SERVICE}/${params.ENVIRONMENT}.yaml"
 
-                    def configFile = "/var/jenkins_home/config-cache/servers/${SERVER_NAME}/${params.SERVICE}/${params.ENVIRONMENT}.yaml"
+                    echo "Fetching configuration from:"
+                    echo rawUrl
 
-                    if (!fileExists(configFile)) {
-                        error("Config file not found: ${configFile}")
-                    }
+                    def configContent = sh(script: "curl -fsSL '${rawUrl}'", returnStdout: true).trim()
+
+                    writeFile file: 'deploy-config.yaml', text: configContent
 
                     echo "Using configuration:"
-                    echo configFile
+                    echo configContent
 
                     // Example:
-                    // def cfg = readYaml file: configFile
+                    // def cfg = readYaml file: 'deploy-config.yaml'
                     // sh "helm upgrade ..."
-                    // sh "kubectl apply -f ${configFile}"
-
+                    // sh "kubectl apply -f deploy-config.yaml"
                 }
             }
         }
