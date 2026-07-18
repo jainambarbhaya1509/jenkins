@@ -1,88 +1,151 @@
 properties([
     parameters([
+
         [
             $class: 'ChoiceParameter',
             choiceType: 'PT_SINGLE_SELECT',
-            description: 'Select the target service',
-            filterLength: 1,
+            name: 'SERVER',
+            description: 'Select the target server',
             filterable: false,
+            script: [
+                $class: 'GroovyScript',
+                script: [
+                    sandbox: false,
+                    script: '''
+                        def root = new File("/opt/jenkins/config-cache/servers")
+
+                        if (!root.exists()) {
+                            return ["Run Config Sync Job"]
+                        }
+
+                        return root.listFiles()
+                                   .findAll { it.isDirectory() }
+                                   .collect { it.name }
+                                   .sort()
+                    '''
+                ]
+            ]
+        ],
+
+        [
+            $class: 'CascadeChoiceParameter',
+            choiceType: 'PT_SINGLE_SELECT',
             name: 'SERVICE',
-            script: [
-                $class: 'GroovyScript',
-                script: [
-                    classpath: [],
-                    sandbox: true,
-                    script: '''
-                        return [
-                            'service1',
-                            'service2'
-                        ]
-                    '''
-                ]
-            ]
-        ],
-        [
-            $class: 'ChoiceParameter',
-            choiceType: 'PT_SINGLE_SELECT',
-            description: 'Select the target environment',
-            filterLength: 1,
+            description: 'Select the target service',
+            referencedParameters: 'SERVER',
             filterable: false,
-            name: 'ENVIRONMENT',
             script: [
                 $class: 'GroovyScript',
                 script: [
-                    classpath: [],
-                    sandbox: true,
+                    sandbox: false,
                     script: '''
-                        return [
-                            'dev',
-                            'qa'
-                        ]
+                        if (!SERVER) {
+                            return []
+                        }
+
+                        def root = new File("/opt/jenkins/config-cache/servers/${SERVER}")
+
+                        if (!root.exists()) {
+                            return ["No Services Found"]
+                        }
+
+                        return root.listFiles()
+                                   .findAll { it.isDirectory() }
+                                   .collect { it.name }
+                                   .sort()
                     '''
                 ]
             ]
         ],
-        
+
         [
-            $class: 'BooleanParameterDefinition',
+            $class: 'CascadeChoiceParameter',
+            choiceType: 'PT_SINGLE_SELECT',
+            name: 'ENVIRONMENT',
+            description: 'Select the deployment environment',
+            referencedParameters: 'SERVER,SERVICE',
+            filterable: false,
+            script: [
+                $class: 'GroovyScript',
+                script: [
+                    sandbox: false,
+                    script: '''
+                        if (!SERVER || !SERVICE) {
+                            return []
+                        }
+
+                        def serviceDir = new File("/opt/jenkins/config-cache/servers/${SERVER}/${SERVICE}")
+
+                        if (!serviceDir.exists()) {
+                            return ["No Environment Found"]
+                        }
+
+                        return serviceDir.listFiles()
+                                         .findAll {
+                                             it.isFile() &&
+                                             (it.name.endsWith(".yaml") || it.name.endsWith(".yml"))
+                                         }
+                                         .collect {
+                                             it.name.replaceAll(/\\.ya?ml$/, "")
+                                         }
+                                         .sort()
+                    '''
+                ]
+            ]
+        ],
+
+        booleanParam(
             name: 'DRY_RUN',
             defaultValue: false,
-            description: 'Refresh configuration cache only'
-        ]
+            description: 'Skip deployment'
+        )
+
     ])
 ])
 
-def configDir = '/opt/jenkins/config-cache'
-def configRepo = 'https://github.com/jainambarbhaya1509/jenkins.git'
+pipeline {
 
-node {
+    agent any
 
-    stage('Clone Config Repo') {
+    stages {
 
-        if (params.DRY_RUN) {
-
-            if (!fileExists("${configDir}/.git")) {
-                echo 'Cloning config repo...'
-                sh "git clone '${configRepo}' '${configDir}'"
-            } else {
-                echo 'Updating config repo...'
-                dir(configDir) {
-                    sh '''
-                        git fetch origin
-                        git reset --hard origin/main
-                    '''
+        stage('Validate') {
+            steps {
+                script {
+                    echo """
+                    ============================
+                    Deployment Configuration
+                    ============================
+                    Server      : ${params.SERVER}
+                    Service     : ${params.SERVICE}
+                    Environment : ${params.ENVIRONMENT}
+                    Dry Run     : ${params.DRY_RUN}
+                    ============================
+                    """
                 }
             }
-
         }
 
-    }
+        stage('Deploy') {
+            when {
+                expression { !params.DRY_RUN }
+            }
 
-    stage('Exit') {
+            steps {
+                script {
 
-        if (params.DRY_RUN) {
-            echo 'Configuration cache refreshed.'
-            echo 'Open Build With Parameters again.'
+                    def configFile = "/opt/jenkins/config-cache/servers/${params.SERVER}/${params.SERVICE}/${params.ENVIRONMENT}.yaml"
+
+                    echo "Using configuration:"
+                    echo configFile
+
+                    // Example:
+                    // def cfg = readYaml file: configFile
+                    // sh "helm upgrade ..."
+                    // sh "kubectl apply -f ${configFile}"
+
+                }
+            }
         }
 
     }
