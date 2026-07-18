@@ -3,27 +3,6 @@ properties([
         [
             $class: 'ChoiceParameter',
             choiceType: 'PT_SINGLE_SELECT',
-            description: 'Select the target environment',
-            filterLength: 1,
-            filterable: false,
-            name: 'ENVIRONMENT',
-            script: [
-                $class: 'GroovyScript',
-                script: [
-                    classpath: [],
-                    sandbox: true,
-                    script: '''
-                        return [
-                            'dev',
-                            'qa'
-                        ]
-                    '''
-                ]
-            ]
-        ],
-        [
-            $class: 'ChoiceParameter',
-            choiceType: 'PT_SINGLE_SELECT',
             description: 'Select the target service',
             filterLength: 1,
             filterable: false,
@@ -42,6 +21,28 @@ properties([
                 ]
             ]
         ],
+        [
+            $class: 'ChoiceParameter',
+            choiceType: 'PT_SINGLE_SELECT',
+            description: 'Select the target environment',
+            filterLength: 1,
+            filterable: false,
+            name: 'ENVIRONMENT',
+            script: [
+                $class: 'GroovyScript',
+                script: [
+                    classpath: [],
+                    sandbox: true,
+                    script: '''
+                        return [
+                            'dev',
+                            'qa'
+                        ]
+                    '''
+                ]
+            ]
+        ],
+        
         [
             $class: 'BooleanParameterDefinition',
             name: 'DRY_RUN',
