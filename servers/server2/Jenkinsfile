@@ -1,56 +1,41 @@
+// ============================================================
+// This Jenkinsfile is scoped to a single server. Change this
+// value if you copy this file for another server, or better,
+// template it out per-server via your job-DSL / seed job.
+// It must match the literal string inside the Groovy scripts
+// below too, since Active Choice scripts run standalone and
+// can't read Jenkinsfile-level variables.
+// ============================================================
+def SERVER_NAME = "server1"
+
 properties([
     parameters([
 
         [
             $class: 'ChoiceParameter',
             choiceType: 'PT_SINGLE_SELECT',
-            name: 'SERVER',
-            description: 'Select the target server',
+            name: 'SERVICE',
+            description: 'Select the target service',
             filterable: false,
             script: [
                 $class: 'GroovyScript',
                 script: [
                     sandbox: false,
                     script: '''
-                        def root = new File("/opt/jenkins/config-cache/servers")
+                        def serverName = "server1" // must match SERVER_NAME above
+
+                        def root = new File("/opt/jenkins/config-cache/servers/${serverName}")
 
                         if (!root.exists()) {
                             return ["Run Config Sync Job"]
                         }
 
-                        return root.listFiles()
-                                   .findAll { it.isDirectory() }
-                                   .collect { it.name }
-                                   .sort()
-                    '''
-                ]
-            ]
-        ],
-
-        [
-            $class: 'CascadeChoiceParameter',
-            choiceType: 'PT_SINGLE_SELECT',
-            name: 'SERVICE',
-            description: 'Select the target service',
-            referencedParameters: 'SERVER',
-            filterable: false,
-            script: [
-                $class: 'GroovyScript',
-                script: [
-                    sandbox: false,
-                    script: '''
-                        if (!SERVER) {
-                            return []
-                        }
-
-                        def root = new File("/opt/jenkins/config-cache/servers/${SERVER}")
-
-                        if (!root.exists()) {
+                        def dirs = root.listFiles()
+                        if (dirs == null) {
                             return ["No Services Found"]
                         }
 
-                        return root.listFiles()
-                                   .findAll { it.isDirectory() }
+                        return dirs.findAll { it.isDirectory() }
                                    .collect { it.name }
                                    .sort()
                     '''
@@ -63,33 +48,45 @@ properties([
             choiceType: 'PT_SINGLE_SELECT',
             name: 'ENVIRONMENT',
             description: 'Select the deployment environment',
-            referencedParameters: 'SERVER,SERVICE',
+            referencedParameters: 'SERVICE',
             filterable: false,
             script: [
                 $class: 'GroovyScript',
                 script: [
                     sandbox: false,
                     script: '''
-                        if (!SERVER || !SERVICE) {
+                        def serverName = "server1" // must match SERVER_NAME above
+
+                        if (!SERVICE) {
                             return []
                         }
 
-                        def serviceDir = new File("/opt/jenkins/config-cache/servers/${SERVER}/${SERVICE}")
+                        def serviceDir = new File("/opt/jenkins/config-cache/servers/${serverName}/${SERVICE}")
 
                         if (!serviceDir.exists()) {
                             return ["No Environment Found"]
                         }
 
-                        return serviceDir.listFiles()
-                                         .findAll {
-                                             it.isFile() &&
-                                             (it.name.endsWith(".yaml") || it.name.endsWith(".yml"))
-                                         }
-                                         .collect {
-                                             it.name.replaceAll(/\\.ya?ml$/, "")
-                                         }
-                                         .sort()
-                    '''
+                        def files = serviceDir.listFiles()
+                        if (files == null) {
+                            return ["No Environment Found"]
+                        }
+
+                        def envs = files.findAll {
+                                            it.isFile() &&
+                                            (it.name.endsWith(".yaml") || it.name.endsWith(".yml"))
+                                        }
+                                        .collect {
+                                            it.name.replaceAll(/\\.ya?ml$/, "")
+                                        }
+                                        .sort()
+
+                        return envs.isEmpty() ? ["No Environment Found"] : envs
+                    ''',
+                ],
+                fallbackScript: [
+                    sandbox: false,
+                    script: 'return ["No Environment Found"]'
                 ]
             ]
         ],
@@ -112,6 +109,12 @@ pipeline {
         stage('Validate') {
             steps {
                 script {
+                    if (params.SERVICE in ["No Services Found"] ||
+                        params.ENVIRONMENT in ["No Environment Found"] ||
+                        params.SERVER in ["Run Config Sync Job", "No Servers Found"]) {
+                        error("Invalid selection. SERVER=${params.SERVER}, SERVICE=${params.SERVICE}, ENVIRONMENT=${params.ENVIRONMENT}")
+                    }
+
                     echo """
                     ============================
                     Deployment Configuration
@@ -135,6 +138,10 @@ pipeline {
                 script {
 
                     def configFile = "/opt/jenkins/config-cache/servers/${params.SERVER}/${params.SERVICE}/${params.ENVIRONMENT}.yaml"
+
+                    if (!fileExists(configFile)) {
+                        error("Config file not found: ${configFile}")
+                    }
 
                     echo "Using configuration:"
                     echo configFile
