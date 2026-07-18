@@ -2,6 +2,70 @@ pipeline {
 
     agent any
 
+    properties([
+        parameters([
+            [$class: 'ChoiceParameter',
+             choiceType: 'PT_SINGLE_SELECT',
+             description: 'Select the target server',
+             filterLength: 1,
+             filterable: false,
+             name: 'SERVER',
+             script: [
+                 $class: 'GroovyScript',
+                 script: [
+                     classpath: [],
+                     sandbox: true,
+                     script: '''
+                         return [
+                             'server1',
+                             'server2'
+                         ]
+                     '''
+                 ]
+             ]],
+
+            [$class: 'ChoiceParameter',
+             choiceType: 'PT_SINGLE_SELECT',
+             description: 'Select the target environment',
+             filterLength: 1,
+             filterable: false,
+             name: 'ENVIRONMENT',
+             script: [
+                 $class: 'GroovyScript',
+                 script: [
+                     classpath: [],
+                     sandbox: true,
+                     script: '''
+                         return [
+                             'dev',
+                             'qa'
+                         ]
+                     '''
+                 ]
+             ]],
+
+            [$class: 'ChoiceParameter',
+             choiceType: 'PT_SINGLE_SELECT',
+             description: 'Select the target service',
+             filterLength: 1,
+             filterable: false,
+             name: 'SERVICE',
+             script: [
+                 $class: 'GroovyScript',
+                 script: [
+                     classpath: [],
+                     sandbox: true,
+                     script: '''
+                         return [
+                             'service1',
+                             'service2'
+                         ]
+                     '''
+                 ]
+             ]]
+        ])
+    ])
+
     parameters {
 
         booleanParam(
