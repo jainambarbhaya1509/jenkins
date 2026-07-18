@@ -1,0 +1,78 @@
+pipeline {
+
+    agent any
+
+    parameters {
+
+        booleanParam(
+            name: 'DRY_RUN',
+            defaultValue: false,
+            description: 'Refresh configuration cache only'
+        )
+
+    }
+
+    environment {
+        CONFIG_DIR = "/opt/jenkins/config-cache"
+        CONFIG_REPO = "https://github.com/jainambarbhaya1509/jenkins.git"
+    }
+
+    stages {
+
+        stage('Clone Config Repo') {
+
+            when {
+                expression {
+                    params.DRY_RUN
+                }
+            }
+
+            steps {
+
+                sh '''
+
+                if [ ! -d "$CONFIG_DIR/.git" ]
+                then
+                    echo "Cloning config repo..."
+
+                    git clone "$CONFIG_REPO" "$CONFIG_DIR"
+
+                else
+
+                    echo "Updating config repo..."
+
+                    cd "$CONFIG_DIR"
+
+                    git fetch origin
+
+                    git reset --hard origin/main
+
+                fi
+
+                '''
+
+            }
+
+        }
+
+        stage("Exit") {
+
+            when {
+                expression {
+                    params.DRY_RUN
+                }
+            }
+
+            steps {
+
+                echo "Configuration cache refreshed."
+
+                echo "Open Build With Parameters again."
+
+            }
+
+        }
+
+    }
+
+}
