@@ -6,7 +6,7 @@
 // below too, since Active Choice scripts run standalone and
 // can't read Jenkinsfile-level variables.
 // ============================================================
-def SERVER_NAME = "server1"
+def SERVER_NAME = "server2"
 
 properties([
     parameters([
@@ -22,7 +22,7 @@ properties([
                 script: [
                     sandbox: false,
                     script: '''
-                        def serverName = "server1" // must match SERVER_NAME above
+                        def serverName = "server2" // must match SERVER_NAME above
 
                         def root = new File("/opt/jenkins/config-cache/servers/${serverName}")
 
